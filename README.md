@@ -1,4 +1,4 @@
-**Better Chat Mute** is a simple mute system, made for use with Better Chat. Using it alone will not do anything, so make sure you have Better Chat installed.
+**Better Chat Mute** is a simple mute system, made for use with Better Chat. Using with Better Chat is intended, but the plugin can be used standalone as well.
 
 ## Permissions
 
