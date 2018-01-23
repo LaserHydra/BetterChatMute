@@ -9,7 +9,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("BetterChat Mute", "LaserHydra", "1.0.9", ResourceId = 2272)]
+    [Info("BetterChat Mute", "LaserHydra", "1.1.0", ResourceId = 2272)]
     [Description("Mute plugin, made for use with Better Chat")]
     internal class BetterChatMute : CovalencePlugin
     {
@@ -29,17 +29,20 @@ namespace Oxide.Plugins
             [JsonIgnore]
             public bool Expired => Timed && ExpireDate < DateTime.UtcNow;
 
+            public string Reason { get; set; }
+
             public static bool IsMuted(IPlayer player) => mutes.ContainsKey(player.Id);
 
-            public static readonly MuteInfo NonTimed = new MuteInfo(DateTime.MinValue);
+            public static readonly DateTime NonTimedExpireDate = DateTime.MinValue;
 
             public MuteInfo()
             {
             }
 
-            public MuteInfo(DateTime expireDate)
+            public MuteInfo(DateTime expireDate, string reason)
             {
                 ExpireDate = expireDate;
+                Reason = reason;
             }
         }
 
@@ -57,14 +60,15 @@ namespace Oxide.Plugins
             lang.RegisterMessages(new Dictionary<string, string>
             {
                 ["No Permission"] = "You don't have permission to use this command.",
-                ["Muted"] = "{player} was muted by {initiator}.",
-                ["Muted Time"] = "{player} was muted by {initiator} for {time}.",
+                ["No Reason"] = "Unknown reason",
+                ["Muted"] = "{player} was muted by {initiator}: {reason}.",
+                ["Muted Time"] = "{player} was muted by {initiator} for {time}: {reason}.",
                 ["Unmuted"] = "{player} was unmuted by {initiator}.",
                 ["Not Muted"] = "{player} is currently not muted.",
                 ["Mute Expired"] = "{player} is no longer muted.",
                 ["Invalid Time Format"] = "Invalid time format. Example: 1d2h3m4s = 1 day, 2 hours, 3 min, 4 sec",
                 ["Nobody Muted"] = "There is nobody muted at the moment.",
-                ["Invalid Syntax Mute"] = "/mute <player|steamid> [time: 1d1h1m1s]",
+                ["Invalid Syntax Mute"] = "/mute <player|steamid> \"[reason]\" [time: 1d1h1m1s]",
                 ["Invalid Syntax Unmute"] = "/unmute <player|steamid>",
                 ["Player Name Not Found"] = "Could not find player with name '{name}'",
                 ["Player ID Not Found"] = "Could not find player with ID '{id}'",
@@ -150,36 +154,43 @@ namespace Oxide.Plugins
 
         #region API
 
-        private void API_Mute(IPlayer target, IPlayer player, bool callHook = true, bool broadcast = true)
+        private void API_Mute(IPlayer target, IPlayer player, string reason = "", bool callHook = true, bool broadcast = true)
         {
-            mutes[target.Id] = MuteInfo.NonTimed;
+            mutes[target.Id] = new MuteInfo(MuteInfo.NonTimedExpireDate, reason);
             SaveData(mutes);
 
+            reason = string.IsNullOrEmpty(reason) ? lang.GetMessage("No Reason", this) : reason;
+
             if (callHook)
-                Interface.CallHook("OnBetterChatMuted", target, player);
+                Interface.CallHook("OnBetterChatMuted", target, player, reason);
 
             if (broadcast)
             {
                 PublicMessage("Muted",
                     new KeyValuePair<string, string>("initiator", player.Name),
-                    new KeyValuePair<string, string>("player", target.Name));
+                    new KeyValuePair<string, string>("player", target.Name),
+                    new KeyValuePair<string, string>("reason", reason));
             }
         }
 
-        private void API_TimeMute(IPlayer target, IPlayer player, TimeSpan timeSpan, bool callHook = true, bool broadcast = true)
+        private void API_TimeMute(IPlayer target, IPlayer player, TimeSpan timeSpan, string reason = "", bool callHook = true, bool broadcast = true)
         {
-            mutes[target.Id] = new MuteInfo(DateTime.UtcNow + timeSpan);
+            mutes[target.Id] = new MuteInfo(DateTime.UtcNow + timeSpan, reason);
             SaveData(mutes);
 
+            reason = string.IsNullOrEmpty(reason) ? lang.GetMessage("No Reason", this) : reason;
+
             if (callHook)
-                Interface.CallHook("OnBetterChatTimeMuted", target, player, timeSpan);
+                Interface.CallHook("OnBetterChatTimeMuted", target, player, timeSpan,
+                    string.IsNullOrEmpty(reason) ? lang.GetMessage("No Reason", this) : reason);
 
             if (broadcast)
             {
                 PublicMessage("Muted Time",
                     new KeyValuePair<string, string>("initiator", player.Name),
                     new KeyValuePair<string, string>("player", target.Name),
-                    new KeyValuePair<string, string>("time", FormatTime(timeSpan)));
+                    new KeyValuePair<string, string>("time", FormatTime(timeSpan)),
+                    new KeyValuePair<string, string>("reason", reason));
             }
         }
 
@@ -254,10 +265,12 @@ namespace Oxide.Plugins
             }
 
             IPlayer target;
+            string reason = string.Empty;
 
             switch (args.Length)
             {
                 case 1:
+                case 2:
                     if (!permission.UserHasPermission(player.Id, "betterchatmute.permanent") && player.Id != "server_console")
                     {
                         player.Reply(lang.GetMessage("No Permission", this, player.Id));
@@ -269,18 +282,24 @@ namespace Oxide.Plugins
                     if (target == null)
                         return;
 
-                    mutes[target.Id] = MuteInfo.NonTimed;
+                    if (args.Length == 2)
+                        reason = args[1];
+
+                    reason = string.IsNullOrEmpty(reason) ? lang.GetMessage("No Reason", this) : reason;
+
+                    mutes[target.Id] = new MuteInfo(MuteInfo.NonTimedExpireDate, reason);
                     SaveData(mutes);
 
-                    Interface.CallHook("OnBetterChatMuted", target, player);
+                    Interface.CallHook("OnBetterChatMuted", target, player, reason);
 
                     PublicMessage("Muted",
                         new KeyValuePair<string, string>("initiator", player.Name),
-                        new KeyValuePair<string, string>("player", target.Name));
+                        new KeyValuePair<string, string>("player", target.Name),
+                        new KeyValuePair<string, string>("reason", reason));
 
                     break;
 
-                case 2:
+                case 3:
                     target = GetPlayer(args[0], player);
 
                     if (target == null)
@@ -288,21 +307,25 @@ namespace Oxide.Plugins
 
                     TimeSpan timeSpan;
 
-                    if (!TryParseTimeSpan(args[1], out timeSpan))
+                    if (!TryParseTimeSpan(args[2], out timeSpan))
                     {
                         player.Reply(lang.GetMessage("Invalid Time Format", this, player.Id));
                         return;
                     }
-                    
-                    mutes[target.Id] = new MuteInfo(DateTime.UtcNow + timeSpan);
+
+                    reason = args[1];
+                    reason = string.IsNullOrEmpty(reason) ? lang.GetMessage("No Reason", this) : reason;
+
+                    mutes[target.Id] = new MuteInfo(DateTime.UtcNow + timeSpan, reason);
                     SaveData(mutes);
 
-                    Interface.CallHook("OnBetterChatTimeMuted", target, player, timeSpan);
+                    Interface.CallHook("OnBetterChatTimeMuted", target, player, timeSpan, reason);
 
                     PublicMessage("Muted Time",
                         new KeyValuePair<string, string>("initiator", player.Name),
                         new KeyValuePair<string, string>("player", target.Name),
-                        new KeyValuePair<string, string>("time", FormatTime(timeSpan)));
+                        new KeyValuePair<string, string>("time", FormatTime(timeSpan)),
+                        new KeyValuePair<string, string>("reason", reason));
 
                     break;
 
