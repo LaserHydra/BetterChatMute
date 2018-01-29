@@ -12,20 +12,32 @@ This plugin uses Oxide's permission system. To assign a permission, use `oxide.g
 
 ## Commands
 
-- **mute `<player|steamid>`** -- Mutes player permanently
-- **mute `<player|steamid> [time: 1d1h1m1s]`** -- Mutes player temporarily
+- **mute `<player|steamid> [reason]`** -- Mutes player permanently
+- **mute `<player|steamid> <time: 1d1h1m1s> [reason]`** -- Mutes player temporarily
 - **unmute `<player|steamid>`** -- Unmutes player
 - **mutelist** -- Shows players that are muted
 - **toggleglobalmute** -- Disables chat for every player without the `betterchatmute.use.global` permission
 
 ## API (for developers)
 
+### Hooks
+
 ```csharp
-void API_Mute(IPlayer target, IPlayer player, bool callHook = true, bool broadcast = true)
-void API_TimeMute(IPlayer target, IPlayer player, TimeSpan timeSpan, bool callHook = true, bool broadcast = true)
+OnBetterChatMuteHandle(IPlayer player, [CanBeNull]JObject muteInfo) // -> return a non-null value to cancel behaviour
+OnBetterChatMuted(IPlayer target, IPlayer initiator, string reason)
+OnBetterChatTimeMuted(IPlayer target, IPlayer initiator, TimeSpan time, string reason)
+OnBetterChatUnmuted(IPlayer target, IPlayer initiator)
+OnBetterChatMuteExpired(IPlayer player)
+```
+
+### API Methods
+
+```csharp
+void API_Mute(IPlayer target, IPlayer player, string reason = "", bool callHook = true, bool broadcast = true)
+void API_TimeMute(IPlayer target, IPlayer player, TimeSpan timeSpan, string reason = "", bool callHook = true, bool broadcast = true)
 bool API_Unmute(IPlayer target, IPlayer player, bool callHook = true, bool broadcast = true)
-void API_SetGlobalMute(bool state)
-List<string> API_GetMuteList()
+void API_SetGlobalMuteState(bool state, bool broadcast = true)
 bool API_GetGlobalMuteState()
 bool API_IsMuted(IPlayer player)
+List<string> API_GetMuteList()
 ```
