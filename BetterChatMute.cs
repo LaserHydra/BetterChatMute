@@ -9,7 +9,7 @@ using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("BetterChat Mute", "LaserHydra", "1.1.1", ResourceId = 118491460)]
+    [Info("BetterChat Mute", "LaserHydra", "1.1.2", ResourceId = 118491460)]
     [Description("Simple mute system, made for use with Better Chat")]
     internal class BetterChatMute : CovalencePlugin
     {
@@ -156,12 +156,6 @@ namespace Oxide.Plugins
             string reason = string.Empty;
             TimeSpan? timeSpan = null;
 
-            if (!permission.UserHasPermission(player.Id, "betterchatmute.permanent") && player.Id != "server_console")
-            {
-                player.Reply(lang.GetMessage("No Permission", this, player.Id));
-                return;
-            }
-
             var target = GetPlayer(args[0], player);
 
             if (target == null)
@@ -174,6 +168,13 @@ namespace Oxide.Plugins
                     args[i] = null;
                     break;
                 }
+            }
+            
+            // No time given; make sure user has permanent muting permission
+            if (timeSpan == null && !permission.UserHasPermission(player.Id, "betterchatmute.permanent") && player.Id != "server_console")
+            {
+                player.Reply(lang.GetMessage("No Permission", this, player.Id));
+                return;
             }
 
             reason = string.Join(" ", args.Skip(1).Where(a => a != null).ToArray());
