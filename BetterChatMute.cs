@@ -9,7 +9,7 @@ using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("Better Chat Mute", "LaserHydra", "1.2.0")]
+    [Info("Better Chat Mute", "LaserHydra", "1.2.1")]
     [Description("Simple mute system, made for use with Better Chat")]
     internal class BetterChatMute : CovalencePlugin
     {
@@ -125,14 +125,14 @@ namespace Oxide.Plugins
 
         #region Commands
 
-        [Command("toggleglobalmute"), Permission("betterchatmute.use.global")]
+        [Command("toggleglobalmute", "bcm.toggleglobalmute"), Permission("betterchatmute.use.global")]
         private void CmdGlobalMute(IPlayer player, string cmd, string[] args)
         {
             _globalMute = !_globalMute;
             PublicMessage(_globalMute ? "Global Mute Enabled" : "Global Mute Disabled");
         }
 
-        [Command("mutelist"), Permission("betterchatmute.use")]
+        [Command("mutelist", "bcm.mutelist"), Permission("betterchatmute.use")]
         private void CmdMuteList(IPlayer player, string cmd, string[] args)
         {
             if (_mutes.Count == 0)
@@ -147,7 +147,7 @@ namespace Oxide.Plugins
             }
         }
 
-        [Command("mute"), Permission("betterchatmute.use")]
+        [Command("mute", "bcm.mute"), Permission("betterchatmute.use")]
         private void CmdMute(IPlayer player, string cmd, string[] args)
         {
             if (args.Length == 0)
@@ -209,7 +209,7 @@ namespace Oxide.Plugins
             }
         }
 
-        [Command("unmute"), Permission("betterchatmute.use")]
+        [Command("unmute", "bcm.unmute"), Permission("betterchatmute.use")]
         private void CmdUnmute(IPlayer player, string cmd, string[] args)
         {
             if (args.Length != 1)

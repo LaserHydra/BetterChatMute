@@ -12,6 +12,8 @@ This plugin uses Oxide's permission system. To assign a permission, use `oxide.g
 
 ## Commands
 
+**Note**: When trying to use these as console commands in Rust, they need to be prefixed with `bcm`. For example: `bcm.unmute <player|steamid>`  
+
 - **mute `<player|steamid> [reason]`** -- Mutes player permanently
 - **mute `<player|steamid> <time: 1d1h1m1s> [reason]`** -- Mutes player temporarily
 - **unmute `<player|steamid>`** -- Unmutes player
