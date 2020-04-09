@@ -9,7 +9,7 @@ using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("BetterChat Mute", "LaserHydra", "1.1.2", ResourceId = 118491460)]
+    [Info("Better Chat Mute", "LaserHydra", "1.2.0")]
     [Description("Simple mute system, made for use with Better Chat")]
     internal class BetterChatMute : CovalencePlugin
     {
@@ -59,7 +59,7 @@ namespace Oxide.Plugins
                     var player = players.FindPlayerById(id);
 
                     _mutes.Remove(id);
-                    PublicMessage("Mute Expired", new KeyValuePair<string, string>("player", player?.Name));
+                    PublicMessage("Mute Expired", new KeyValuePair<string, string>("player", SanitizeName(player?.Name)));
 
                     Interface.CallHook("OnBetterChatMuteExpired", player);
 
@@ -75,33 +75,36 @@ namespace Oxide.Plugins
             });
         }
 
+#if RUST
+        private object OnPlayerChat(BasePlayer bplayer, string message, ConVar.Chat.ChatChannel chatChannel)
+        {
+            IPlayer player = bplayer.IPlayer;
+            bool isPublicMessage = chatChannel == ConVar.Chat.ChatChannel.Global;
+#else
         private object OnUserChat(IPlayer player, string message)
         {
-            object result = HandleChat(player);
+            bool isPublicMessage = true;
+#endif
+            if (plugins.Exists("BetterChat"))
+                return null;
 
-            if (result is bool && !(bool)result)
-            {
-                if (!MuteInfo.IsMuted(player) && _globalMute)
-                {
-                    player.Reply(lang.GetMessage("Global Mute Active", this, player.Id));
-                }
-                else if (_mutes[player.Id].Timed)
-                {
-                    player.Reply(
-                        lang.GetMessage("Time Muted Player Chat", this, player.Id)
-                            .Replace("{time}", FormatTime(_mutes[player.Id].ExpireDate - DateTime.UtcNow))
-                   );
-                }
-                else
-                {
-                    player.Reply(lang.GetMessage("Muted Player Chat", this, player.Id));
-                } 
-            }
-
-            return result;
+            return HandleChat(player, isPublicMessage);
         }
 
-        private object OnBetterChat(Dictionary<string, object> messageData) => HandleChat((IPlayer) messageData["Player"]);
+        private void OnBetterChat(Dictionary<string, object> messageData)
+        {
+#if RUST
+            var chatChannel = (ConVar.Chat.ChatChannel)messageData["ChatChannel"];
+            bool isPublicMessage = chatChannel == ConVar.Chat.ChatChannel.Global;
+#else
+            bool isPublicMessage = true;
+#endif
+
+            if (HandleChat((IPlayer)messageData["Player"], isPublicMessage) != null)
+            {
+                messageData["CancelOption"] = 2;
+            }
+        }
 
         private void OnUserInit(IPlayer player)
         {
@@ -111,10 +114,10 @@ namespace Oxide.Plugins
             {
                 if (_mutes[player.Id].Timed)
                     PublicMessage("Time Muted Player Joined",
-                        new KeyValuePair<string, string>("player", player.Name), 
+                        new KeyValuePair<string, string>("player", SanitizeName(player.Name)), 
                         new KeyValuePair<string, string>("time", FormatTime(_mutes[player.Id].ExpireDate - DateTime.UtcNow)));
                 else
-                    PublicMessage("Muted Player Joined", new KeyValuePair<string, string>("player", player.Name));
+                    PublicMessage("Muted Player Joined", new KeyValuePair<string, string>("player", SanitizeName(player.Name)));
             }
         }
 
@@ -138,7 +141,7 @@ namespace Oxide.Plugins
             {
                 player.Reply(string.Join(Environment.NewLine,
                     _mutes.Select(kvp =>
-                        $"{players.FindPlayerById(kvp.Key).Name}: {FormatTime(kvp.Value.ExpireDate - DateTime.UtcNow)}"
+                        $"{SanitizeName(players.FindPlayerById(kvp.Key).Name)}: {FormatTime(kvp.Value.ExpireDate - DateTime.UtcNow)}"
                     ).ToArray()
                 ));
             }
@@ -190,8 +193,8 @@ namespace Oxide.Plugins
                 Interface.CallHook("OnBetterChatMuted", target, player, reason);
 
                 PublicMessage("Muted",
-                    new KeyValuePair<string, string>("initiator", player.Name),
-                    new KeyValuePair<string, string>("player", target.Name),
+                    new KeyValuePair<string, string>("initiator", SanitizeName(player.Name)),
+                    new KeyValuePair<string, string>("player", SanitizeName(target.Name)),
                     new KeyValuePair<string, string>("reason", reason));
             }
             else
@@ -199,8 +202,8 @@ namespace Oxide.Plugins
                 Interface.CallHook("OnBetterChatTimeMuted", target, player, (TimeSpan) timeSpan, reason);
 
                 PublicMessage("Muted Time",
-                    new KeyValuePair<string, string>("initiator", player.Name),
-                    new KeyValuePair<string, string>("player", target.Name),
+                    new KeyValuePair<string, string>("initiator", SanitizeName(player.Name)),
+                    new KeyValuePair<string, string>("player", SanitizeName(target.Name)),
                     new KeyValuePair<string, string>("time", FormatTime((TimeSpan) timeSpan)),
                     new KeyValuePair<string, string>("reason", reason));
             }
@@ -222,7 +225,7 @@ namespace Oxide.Plugins
 
             if (!MuteInfo.IsMuted(target))
             {
-                player.Reply(lang.GetMessage("Not Muted", this, player.Id).Replace("{player}", target.Name));
+                player.Reply(lang.GetMessage("Not Muted", this, player.Id).Replace("{player}", SanitizeName(target.Name)));
                 return;
             }
 
@@ -232,8 +235,8 @@ namespace Oxide.Plugins
             Interface.CallHook("OnBetterChatUnmuted", target, player);
 
             PublicMessage("Unmuted",
-                new KeyValuePair<string, string>("initiator", player.Name),
-                new KeyValuePair<string, string>("player", target.Name));
+                new KeyValuePair<string, string>("initiator", SanitizeName(player.Name)),
+                new KeyValuePair<string, string>("player", SanitizeName(target.Name)));
         }
 
         #endregion
@@ -253,8 +256,8 @@ namespace Oxide.Plugins
             if (broadcast)
             {
                 PublicMessage("Muted",
-                    new KeyValuePair<string, string>("initiator", player.Name),
-                    new KeyValuePair<string, string>("player", target.Name),
+                    new KeyValuePair<string, string>("initiator", SanitizeName(player.Name)),
+                    new KeyValuePair<string, string>("player", SanitizeName(target.Name)),
                     new KeyValuePair<string, string>("reason", reason));
             }
         }
@@ -273,8 +276,8 @@ namespace Oxide.Plugins
             if (broadcast)
             {
                 PublicMessage("Muted Time",
-                    new KeyValuePair<string, string>("initiator", player.Name),
-                    new KeyValuePair<string, string>("player", target.Name),
+                    new KeyValuePair<string, string>("initiator", SanitizeName(player.Name)),
+                    new KeyValuePair<string, string>("player", SanitizeName(target.Name)),
                     new KeyValuePair<string, string>("time", FormatTime(timeSpan)),
                     new KeyValuePair<string, string>("reason", reason));
             }
@@ -294,8 +297,8 @@ namespace Oxide.Plugins
             if (broadcast)
             {
                 PublicMessage("Unmuted",
-                    new KeyValuePair<string, string>("initiator", player.Name),
-                    new KeyValuePair<string, string>("player", target.Name));
+                    new KeyValuePair<string, string>("initiator", SanitizeName(player.Name)),
+                    new KeyValuePair<string, string>("player", SanitizeName(target.Name)));
             }
 
             return true;
@@ -319,6 +322,14 @@ namespace Oxide.Plugins
 
         #region Helpers
 
+        private string SanitizeName(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+                return name;
+
+            return name.Replace("<", "‹").Replace(">", "›");
+        }
+
         private void PublicMessage(string key, params KeyValuePair<string, string>[] replacements)
         {
             var message = lang.GetMessage(key, this);
@@ -330,20 +341,40 @@ namespace Oxide.Plugins
             Puts(message);
         }
 
-        private object HandleChat(IPlayer player)
+        private object HandleChat(IPlayer player, bool isPublicChat)
         {
+            if (!isPublicChat)
+                return null;
+
             UpdateMuteStatus(player);
 
             var result = Interface.CallHook("OnBetterChatMuteHandle", player, MuteInfo.IsMuted(player) ? JObject.FromObject(_mutes[player.Id]) : null);
 
             if (result != null)
-                return null;
+                return result;
 
             if (MuteInfo.IsMuted(player))
-                return false;
+            {
+                if (_mutes[player.Id].Timed)
+                {
+                    player.Reply(lang.GetMessage("Time Muted Player Chat", this, player.Id)
+                        .Replace("{time}", FormatTime(_mutes[player.Id].ExpireDate - DateTime.UtcNow))
+                    );
+                }
+                else
+                {
+                    player.Reply(lang.GetMessage("Muted Player Chat", this, player.Id));
+                }
+
+                return true;
+            }
 
             if (_globalMute && !permission.UserHasPermission(player.Id, "betterchatmute.use.global"))
-                return false;
+            {
+                player.Reply(lang.GetMessage("Global Mute Active", this, player.Id));
+
+                return true;
+            }
 
             return null;
         }
@@ -355,7 +386,7 @@ namespace Oxide.Plugins
                 _mutes.Remove(player.Id);
                 SaveData(_mutes);
 
-                PublicMessage("Mute Expired", new KeyValuePair<string, string>("player", players.FindPlayerById(player.Id)?.Name));
+                PublicMessage("Mute Expired", new KeyValuePair<string, string>("player", SanitizeName(players.FindPlayerById(player.Id)?.Name)));
 
                 Interface.CallHook("OnBetterChatMuteExpired", player);
             }
@@ -394,7 +425,7 @@ namespace Oxide.Plugins
                     return foundPlayers[0];
 
                 default:
-                    var names = (from current in foundPlayers select current.Name).ToArray();
+                    var names = (from current in foundPlayers select SanitizeName(current.Name)).ToArray();
                     requestor.Reply(lang.GetMessage("Multiple Players Found", this, requestor.Id).Replace("{matches}", string.Join(", ", names)));
                     break;
             }
